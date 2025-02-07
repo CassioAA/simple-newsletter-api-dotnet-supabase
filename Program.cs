@@ -1,17 +1,18 @@
 using Supabase;
-using Supabase.Interfaces;
+using NewsletterAPI.Contracts;
+using NewsletterAPI.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddScoped<Client>(_ =>
     new Client(
-        builder.Configuration["SupabaseUrl"],
-        builder.Configuration["SupabaseKey"],
+        builder.Configuration["SupabaseUrl"] 
+            ?? throw new InvalidOperationException(),
+        builder.Configuration["SupabaseKey"] 
+            ?? throw new InvalidOperationException(),
         new SupabaseOptions
         {
             AutoRefreshToken = true,
@@ -28,6 +29,71 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.MapPost("/newsletters", async (
+        CreateNewsletterRequest request,
+        Client client
+    ) =>
+        {
+            var newsletter = new Newsletter
+            {
+                Name = request.Name,
+                Description = request.Description,
+                ReadTime = request.ReadTime,
+                CreatedAt = DateTime.Now
+            };
+
+            var response = await client.From<Newsletter>().Insert(newsletter);
+
+            var newNewsletter = response.Models.First();
+
+            return Results.Ok(newNewsletter.Id);
+        }
+);
+
+app.MapGet("/newsletters/{id}", async (
+        long id, 
+        Client client
+    ) =>
+        {
+            var response = await client
+                .From<Newsletter>()
+                .Where(n => n.Id == id)
+                .Get();
+
+            var newsletter = response.Models.FirstOrDefault();
+
+            if (newsletter is null)
+            {
+                return Results.NotFound();
+            }
+
+            var newsletterResponse = new NewsletterResponse
+            {
+                Id = newsletter.Id,
+                Name = newsletter.Name,
+                Description = newsletter.Description,
+                ReadTime = newsletter.ReadTime,
+                CreatedAt = newsletter.CreatedAt
+            };
+
+            return Results.Ok(newsletterResponse);
+        }
+);
+
+app.MapDelete("/newsletters/{id}", async (
+        long id, 
+        Client client
+    ) =>
+        {
+            await client
+                .From<Newsletter>()
+                .Where(n => n.Id == id)
+                .Delete();
+
+            return Results.NoContent();
+        }
+);
 
 app.UseHttpsRedirection();
 
